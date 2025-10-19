@@ -4,11 +4,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "@/lib/supabaseClient";
 import { db } from "@/lib/firebaseConfig";
-import {
-  doc,
-  getDoc,
-  updateDoc,
-} from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 
 export default function Page() {
   const router = useRouter();
@@ -74,7 +70,11 @@ export default function Page() {
 
     try {
       let imageUrl = oldImg || "";
-
+      const fileImgName = oldImg?.split("/user_bk/")[1];
+      if (fileImgName) {
+        await supabase.storage.from("user_bk").remove([fileImgName]);
+        console.log("ลบรูปเก่าออกจาก storage สำเร็จ✅");
+      }
       // ✅ ถ้ามีรูปใหม่ → อัปโหลดไป Supabase
       if (userImage) {
         const newFileName = `${Date.now()}-${userImage.name}`;
@@ -204,8 +204,12 @@ export default function Page() {
             value={gender}
             onChange={(e) => setGender(e.target.value)}
           >
-            <option value="male" className="text-black">Male</option>
-            <option value="female" className="text-black">Female</option>
+            <option value="male" className="text-black">
+              Male
+            </option>
+            <option value="female" className="text-black">
+              Female
+            </option>
           </select>
 
           <button
