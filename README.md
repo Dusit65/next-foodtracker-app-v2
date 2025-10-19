@@ -5,7 +5,7 @@ V0.1
 Progress Checker ✅success |❌not yet | 🛠️Under development
 register    ✅
 login       ✅
-dashboard   ❌
+dashboard   🛠️
 addfood     ❌ 
 updatefood  ❌
 profile     ❌
