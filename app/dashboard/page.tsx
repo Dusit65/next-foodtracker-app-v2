@@ -72,21 +72,24 @@ export default function Page() {
       setLoading(true);
 
       try {
-        const q = query(collection(db, "food_cl"), where("user_id", "==", userId));
+        const q = query(
+          collection(db, "food_cl"),
+          where("user_id", "==", userId)
+        );
         const querySnapshot = await getDocs(q);
 
         const items: FoodLog[] = querySnapshot.docs
           .map((doc) => {
             const data = doc.data();
 
-            // 🔧 แปลงวันที่ให้แน่นอน ไม่ว่าจะเป็น string หรือ Timestamp
             let formattedDate = "";
             if (data.fooddate) {
               if (data.fooddate.toDate) {
-                // Firestore Timestamp
-                formattedDate = data.fooddate.toDate().toISOString().split("T")[0];
+                formattedDate = data.fooddate
+                  .toDate()
+                  .toISOString()
+                  .split("T")[0];
               } else if (typeof data.fooddate === "string") {
-                // ISO string หรือ text
                 formattedDate = data.fooddate.split("T")[0];
               }
             }
@@ -115,17 +118,35 @@ export default function Page() {
     fetchFoods();
   }, [userId, page, pageSize]);
 
-  // ✅ ลบข้อมูลอาหาร
-  const handleDelete = async (id: string) => {
+  // ✅ ลบข้อมูลอาหาร + ลบรูปใน Supabase
+  const handleDelete = async (id: string, oldImg: string) => {
     if (!confirm("แน่ใจหรือไม่ว่าต้องการลบข้อมูลนี้?")) return;
+
     try {
+      // ✅ ตัด URL เอาเฉพาะ path ใน bucket
+      const fileImgPath = oldImg?.split("/food_bk/")[1];
+
+      if (fileImgPath) {
+        const { error } = await supabase.storage
+          .from("food_bk")
+          .remove([fileImgPath]);
+
+        if (error) {
+          console.error("❌ ลบรูปใน storage ไม่สำเร็จ:", error.message);
+        } else {
+          console.log("✅ ลบรูปออกจาก Supabase Storage สำเร็จ");
+        }
+      }
+
+      // ✅ ลบ document ออกจาก Firestore
       await deleteDoc(doc(db, "food_cl", id));
-      alert("ลบข้อมูลสำเร็จ ✅");
+      alert("ลบข้อมูลอาหารสำเร็จ ✅");
+
       setFoods((prev) => prev.filter((f) => f.id !== id));
       setTotal((t) => t - 1);
     } catch (err) {
       console.error("Error deleting:", err);
-      alert("ไม่สามารถลบข้อมูลได้ ❌");
+      alert("ไม่สามารถลบข้อมูลอาหารได้ ❌");
     }
   };
 
@@ -158,10 +179,12 @@ export default function Page() {
 
         <div className="flex items-center gap-3">
           <Link
-          href="/profile"
-          className="flex items-center gap-2 text-gray-300 hover:text-blue-400 transition-colors"
-        >{userName}</Link>
-          
+            href="/profile"
+            className="flex items-center gap-2 text-gray-300 hover:text-blue-400 transition-colors"
+          >
+            {userName}
+          </Link>
+
           <Image
             src={userAvatar || profile}
             alt="User"
@@ -245,7 +268,9 @@ export default function Page() {
                           <Edit size={26} />
                         </Link>
                         <button
-                          onClick={() => handleDelete(food.id)}
+                          onClick={() =>
+                            handleDelete(food.id, food.food_image_url)
+                          }
                           className="p-1 text-red-500 hover:text-red-400"
                         >
                           <Trash2 size={26} />
