@@ -3,7 +3,6 @@ import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
-  Search,
   PlusCircle,
   Edit,
   Trash2,
@@ -25,27 +24,21 @@ import {
   doc,
 } from "firebase/firestore";
 
-
-useEffect;
 interface FoodLog {
   id: string;
-  date: string; // yyyy-mm-dd
-  imageUrl: string;
-  name: string;
-  meal: "Breakfast" | "Lunch" | "Dinner" | "Snack";
+  foodname: string;
+  meal: string;
+  fooddate: string;
+  food_image_url: string;
 }
+
 export default function Page() {
-  // const [foods, setFoods] = useState<FoodLog[]>(mockFoodData);
-  // const [searchQuery, setSearchQuery] = useState("");
-  // const [currentPage, setCurrentPage] = useState(1);
-  // const itemsPerPage = 10;
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
 
   const [foods, setFoods] = useState<FoodLog[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
@@ -56,41 +49,61 @@ export default function Page() {
     [total, pageSize]
   );
 
-  const isExternalUrl = (u?: string | null) => !!u && /^https?:\/\//i.test(u);
-  // ===== Load user once =====
+  // ✅ โหลด user จาก localStorage
   useEffect(() => {
     const uid = localStorage.getItem("user_id");
     const uname = localStorage.getItem("fullname");
     const uimg = localStorage.getItem("userImage");
+
     if (!uid) {
       router.push("/login");
       return;
     }
+
     setUserId(uid);
     setUserName(uname);
     setUserAvatar(uimg);
   }, [router]);
 
-  // ===== Fetch foods when user/page/search/pageSize changes =====
+  // ✅ ดึงข้อมูลอาหารจาก Firestore
   useEffect(() => {
     const fetchFoods = async () => {
       if (!userId) return;
       setLoading(true);
 
       try {
-        const q = query(collection(db, "food_tb"), where("user_id", "==", userId));
+        const q = query(collection(db, "food_cl"), where("user_id", "==", userId));
         const querySnapshot = await getDocs(q);
 
-        const items: FoodLog[] = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Omit<FoodLog, "id">),
-        }));
+        const items: FoodLog[] = querySnapshot.docs
+          .map((doc) => {
+            const data = doc.data();
 
-        // Pagination (client-side)
+            // 🔧 แปลงวันที่ให้แน่นอน ไม่ว่าจะเป็น string หรือ Timestamp
+            let formattedDate = "";
+            if (data.fooddate) {
+              if (data.fooddate.toDate) {
+                // Firestore Timestamp
+                formattedDate = data.fooddate.toDate().toISOString().split("T")[0];
+              } else if (typeof data.fooddate === "string") {
+                // ISO string หรือ text
+                formattedDate = data.fooddate.split("T")[0];
+              }
+            }
+
+            return {
+              id: doc.id,
+              foodname: data.foodname || "Unknown",
+              meal: data.meal || "-",
+              fooddate: formattedDate,
+              food_image_url: data.food_image_url || "",
+            };
+          })
+          .sort((a, b) => (a.fooddate < b.fooddate ? 1 : -1));
+
         setTotal(items.length);
         const start = (page - 1) * pageSize;
         const paginated = items.slice(start, start + pageSize);
-
         setFoods(paginated);
       } catch (error) {
         console.error("Error fetching foods:", error);
@@ -101,12 +114,12 @@ export default function Page() {
 
     fetchFoods();
   }, [userId, page, pageSize]);
-  
-//delete food
+
+  // ✅ ลบข้อมูลอาหาร
   const handleDelete = async (id: string) => {
     if (!confirm("แน่ใจหรือไม่ว่าต้องการลบข้อมูลนี้?")) return;
     try {
-      await deleteDoc(doc(db, "food_tb", id));
+      await deleteDoc(doc(db, "food_cl", id));
       alert("ลบข้อมูลสำเร็จ ✅");
       setFoods((prev) => prev.filter((f) => f.id !== id));
       setTotal((t) => t - 1);
@@ -115,39 +128,19 @@ export default function Page() {
       alert("ไม่สามารถลบข้อมูลได้ ❌");
     }
   };
-//logout
+
+  // ✅ ออกจากระบบ
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
     } catch {}
     localStorage.removeItem("user_id");
     localStorage.removeItem("fullname");
-    localStorage.removeItem("user_image_url");
+    localStorage.removeItem("userImage");
     router.push("/login");
   };
 
-  const avatarNode =
-    isExternalUrl(userAvatar) && userAvatar ? (
-      <Image
-        src={userAvatar}
-        alt="User profile picture"
-        width={40}
-        height={40}
-        className="rounded-full object-cover w-10 h-10 ring-1 ring-gray-600"
-        unoptimized
-      />
-    ) : (
-      <Image
-        src={profile}
-        alt="User profile picture"
-        width={40}
-        height={40}
-        className="rounded-full object-cover w-10 h-10 ring-1 ring-gray-600"
-      />
-    );
-  
-
-   return (
+  return (
     <main className="min-h-screen p-4 sm:p-8 bg-black text-white">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
@@ -164,7 +157,11 @@ export default function Page() {
         </h1>
 
         <div className="flex items-center gap-3">
-          <span className="hidden sm:inline font-semibold">{userName}</span>
+          <Link
+          href="/profile"
+          className="flex items-center gap-2 text-gray-300 hover:text-blue-400 transition-colors"
+        >{userName}</Link>
+          
           <Image
             src={userAvatar || profile}
             alt="User"
@@ -201,9 +198,7 @@ export default function Page() {
                 <th className="border p-3 font-semibold">Date</th>
                 <th className="border p-3 font-semibold">Food</th>
                 <th className="border p-3 font-semibold">Meal</th>
-                <th className="border p-3 text-right font-semibold">
-                  Actions
-                </th>
+                <th className="border p-3 text-right font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -222,13 +217,13 @@ export default function Page() {
               ) : (
                 foods.map((food) => (
                   <tr key={food.id} className="hover:bg-gray-200">
-                    <td className="border p-3">{food.date}</td>
+                    <td className="border p-3">{food.fooddate || "-"}</td>
                     <td className="border p-3">
                       <div className="flex items-center gap-3">
-                        {food.imageUrl ? (
+                        {food.food_image_url ? (
                           <Image
-                            src={food.imageUrl}
-                            alt={food.name}
+                            src={food.food_image_url}
+                            alt={food.foodname}
                             width={40}
                             height={40}
                             className="w-10 h-10 rounded-md object-cover ring-1 ring-gray-600"
@@ -237,7 +232,7 @@ export default function Page() {
                         ) : (
                           <div className="w-10 h-10 bg-gray-700 rounded-md" />
                         )}
-                        <span className="font-medium">{food.name}</span>
+                        <span className="font-medium">{food.foodname}</span>
                       </div>
                     </td>
                     <td className="border p-3">{food.meal}</td>

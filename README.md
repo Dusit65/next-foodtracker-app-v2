@@ -9,10 +9,10 @@ register    ✅
 
 login       ✅
 
-dashboard   🛠️
+dashboard   ✅
 
-addfood     ❌ 
+addfood     ✅ 
 
 updatefood  ❌
 
-profile     ❌
+profile     🛠️
